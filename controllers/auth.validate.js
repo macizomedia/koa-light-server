@@ -1,119 +1,19 @@
-const { validationResult } = require('../middleware/utils');
-const { check } = require('express-validator');
-
+const { checkBody } = require('koa-validation');
 /**
  * Validates register request
  */
-exports.register = [
-	check('name')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY'),
-	check('email')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY')
-		.isEmail()
-		.withMessage('EMAIL_IS_NOT_VALID'),
-	check('password')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY')
-		.isLength({
-			min: 5
-		})
-		.withMessage('PASSWORD_TOO_SHORT_MIN_5'),
-	(req, res, next) => {
-		validationResult(req, res, next);
-	}
-];
+exports.register = function  (data, next) {
+	checkBody('name').notEmpty('must provide a name').len(3, 20),
+	checkBody('email').notEmpty().isEmail('your enter a bad email.'),
+	checkBody('password').notEmpty().len(5, 20),
+	next();
+};
 
 /**
  * Validates login request
  */
-exports.login = [
-	check('email')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY')
-		.isEmail()
-		.withMessage('EMAIL_IS_NOT_VALID'),
-	check('password')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY')
-		.isLength({
-			min: 5
-		})
-		.withMessage('PASSWORD_TOO_SHORT_MIN_5'),
-	(req, res, next) => {
-		validationResult(req, res, next);
-	}
-];
-
-/**
- * Validates verify request
- */
-exports.verify = [
-	check('id')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY'),
-	(req, res, next) => {
-		validationResult(req, res, next);
-	}
-];
-
-/**
- * Validates forgot password request
- */
-exports.forgotPassword = [
-	check('email')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY')
-		.isEmail()
-		.withMessage('EMAIL_IS_NOT_VALID'),
-	(req, res, next) => {
-		validationResult(req, res, next);
-	}
-];
-
-/**
- * Validates reset password request
- */
-exports.resetPassword = [
-	check('id')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY'),
-	check('password')
-		.exists()
-		.withMessage('MISSING')
-		.not()
-		.isEmpty()
-		.withMessage('IS_EMPTY')
-		.isLength({
-			min: 5
-		})
-		.withMessage('PASSWORD_TOO_SHORT_MIN_5'),
-	(req, res, next) => {
-		validationResult(req, res, next);
-	}
-];
+exports.login = function * () {
+	this.checkBody('email').notEmpty().isEmail('your enter a bad email.'),
+	this.checkBody('password').notEmpty().len(5, 20),
+	yield this.ctx.req.body;
+};

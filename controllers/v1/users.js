@@ -1,91 +1,52 @@
-const model = require('../models/city');
+const model = require('../../models/user');
+const uuid = require('uuid');
 const { matchedData } = require('express-validator');
-const utils = require('../middleware/utils');
-const db = require('../middleware/db');
+const utils = require('../../middleware/utils');
+const db = require('../../middleware/db');
+const emailer = require('../../middleware/emailer');
 
 /*********************
  * Private functions *
  *********************/
 
 /**
- * Checks if a city already exists excluding itself
- * @param {string} id - id of item
- * @param {string} name - name of item
+ * Creates a new item in database
+ * @param {Object} req - request object
  */
-const cityExistsExcludingItself = async (id, name) => {
+const createItem = async (req) => {
 	return new Promise((resolve, reject) => {
-		model.findOne(
-			{
-				name,
-				_id: {
-					$ne: id
-				}
-			},
-			(err, item) => {
-				utils.itemAlreadyExists(err, item, reject, 'CITY_ALREADY_EXISTS');
-				resolve(false);
+		const user = new model({
+			name: req.name,
+			email: req.email,
+			password: req.password,
+			role: req.role,
+			phone: req.phone,
+			city: req.city,
+			country: req.country,
+			verification: uuid.v4()
+		});
+		user.save((err, item) => {
+			if (err) {
+				reject(utils.buildErrObject(422, err.message));
 			}
-		);
-	});
-};
-
-/**
- * Checks if a city already exists in database
- * @param {string} name - name of item
- */
-const cityExists = async (name) => {
-	return new Promise((resolve, reject) => {
-		model.findOne(
-			{
-				name
-			},
-			(err, item) => {
-				utils.itemAlreadyExists(err, item, reject, 'CITY_ALREADY_EXISTS');
-				resolve(false);
-			}
-		);
-	});
-};
-
-/**
- * Gets all items from database
- */
-const getAllItemsFromDB = async () => {
-	return new Promise((resolve, reject) => {
-		model.find(
-			{},
-			'-updatedAt -createdAt',
-			{
-				sort: {
-					name: 1
-				}
-			},
-			(err, items) => {
-				if (err) {
-					reject(utils.buildErrObject(422, err.message));
-				}
-				resolve(items);
-			}
-		);
+			// Removes properties with rest operator
+			const removeProperties = ({
+				// eslint-disable-next-line no-unused-vars
+				password,
+				// eslint-disable-next-line no-unused-vars
+				blockExpires,
+				// eslint-disable-next-line no-unused-vars
+				loginAttempts,
+				...rest
+			}) => rest;
+			resolve(removeProperties(item.toObject()));
+		});
 	});
 };
 
 /********************
  * Public functions *
  ********************/
-
-/**
- * Get all items function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
- */
-exports.getAllItems = async (req, res) => {
-	try {
-		res.status(200).json(await getAllItemsFromDB());
-	} catch (error) {
-		utils.handleError(res, error);
-	}
-};
 
 /**
  * Get items function called by route
@@ -125,8 +86,11 @@ exports.updateItem = async (req, res) => {
 	try {
 		req = matchedData(req);
 		const id = await utils.isIDGood(req.id);
-		const doesCityExists = await cityExistsExcludingItself(id, req.name);
-		if (!doesCityExists) {
+		const doesEmailExists = await emailer.emailExistsExcludingMyself(
+			id,
+			req.email
+		);
+		if (!doesEmailExists) {
 			res.status(200).json(await db.updateItem(id, model, req));
 		}
 	} catch (error) {
@@ -141,10 +105,14 @@ exports.updateItem = async (req, res) => {
  */
 exports.createItem = async (req, res) => {
 	try {
+		// Gets locale from header 'Accept-Language'
+		const locale = req.getLocale();
 		req = matchedData(req);
-		const doesCityExists = await cityExists(req.name);
-		if (!doesCityExists) {
-			res.status(201).json(await db.createItem(req, model));
+		const doesEmailExists = await emailer.emailExists(req.email);
+		if (!doesEmailExists) {
+			const item = await createItem(req);
+			emailer.sendRegistrationEmailMessage(locale, item);
+			res.status(201).json(item);
 		}
 	} catch (error) {
 		utils.handleError(res, error);

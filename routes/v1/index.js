@@ -1,7 +1,7 @@
 const router = require('koa-router');
 const fs = require('fs');
 const routesPath = `${__dirname}/`;
-const { removeExtensionFromFile } = require('../middleware/utils');
+const { removeExtensionFromFile } = require('../../middleware/utils');
 
 /*
  * Load routes statically and/or dynamically

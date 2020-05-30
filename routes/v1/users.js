@@ -1,8 +1,8 @@
-const controller = require('../controllers/users');
-const validate = require('../controllers/users.validate');
-const AuthController = require('../controllers/auth');
+const controller = require('../../controllers/users');
+const validate = require('../../controllers/users.validate');
+const AuthController = require('../../controllers/auth');
 const router = require('koa-router');
-require('../config/passport');
+require('../../config/passport');
 const passport = require('passport');
 const requireAuth = passport.authenticate('jwt', {
 	session: false

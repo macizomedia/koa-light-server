@@ -6,18 +6,23 @@ const bodyparser = require('koa-bodyparser');
 const morgan = require('koa-morgan');
 const compression = require('koa-compress');
 const helmet = require('koa-helmet');
+const respond = require('koa-respond');
+const i18n = require('koa-i18n');
+const locale = require('koa-locale');
 const passport = require('koa-passport');
 const mount = require('koa-mount');
 const graphqlHTTP = require('koa-graphql');
 const schema = require('./graphql/schema');
 const initDB = require('./config/database');
-const Router = require('koa-router');
+
+
+const api = require('./router');
 const errorHandler = require('./middleware/errorHandler');
 
 initDB();
 
 const app = new Koa();
-const router = new Router();
+locale(app);
 
 app.keys = new KeyGrip(['a complicated secret', 'i like onions'], 'sha256');
 
@@ -44,29 +49,34 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 app.use(json());
-app.use(bodyparser());
+app.use(bodyparser({
+	enableTypes: ['json'],
+	jsonLimit: '5mb',
+	strict: true,
+	onerror: function (err, ctx) {
+		ctx.throw('body parse error', 422);
+	}
+}));
+
 app.use(cors());
 app.use(compression());
 app.use(helmet());
+app.use(respond());
+
+app.use(i18n(app, {
+	directory: `${__dirname}/locales`,
+	locales: ['es', 'en'],
+	objectNotation: true
+}));
+
 app.use(passport.initialize());
 app.use(errorHandler);
-
-
-const authRoute = require('./routes/v1/auth');
-
 app.use(mount('/graphql', graphqlHTTP({
 	schema,
 	graphiql: true
 })));
 
-router.get('/home', ctx => (
-	ctx.body = 'HOME'
-));
-
-router.get('/auth', authRoute);
+app.use(api.middleware());
 
 
-app
-	.use(router.routes())
-	.use(router.allowedMethods())
-	.listen(process.env.PORT || 3000, () => console.log('server started 3000'));
+app.listen(process.env.PORT || 3000, () => console.log('server started 3000'));
