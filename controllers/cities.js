@@ -1,7 +1,7 @@
-const model = require('../../models/cityity');
+const model = require('../models/city');
 const { matchedData } = require('express-validator');
-const utils = require('../../middleware/utilsils');
-const db = require('../../../middleware/db');
+const utils = require('../middleware/utils');
+const db = require('../middleware/db');
 
 /*********************
  * Private functions *
@@ -76,92 +76,88 @@ const getAllItemsFromDB = async () => {
 
 /**
  * Get all items function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request response
  */
-exports.getAllItems = async (req, res) => {
+exports.getAllItems = async (ctx) => {
 	try {
-		res.status(200).json(await getAllItemsFromDB());
+		const result = await getAllItemsFromDB();
+		console.log(result);
+		ctx.ok(result);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Get items function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.getItems = async (req, res) => {
+exports.getItems = async (ctx) => {
 	try {
-		const query = await db.checkQueryString(req.query);
-		res.status(200).json(await db.getItems(req, model, query));
+		const query = await db.checkQueryString(ctx.request.query);
+		ctx.status(200).json(await db.getItems(ctx, model, query));
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Get item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.getItem = async (req, res) => {
+exports.getItem = async (ctx) => {
 	try {
-		req = matchedData(req);
-		const id = await utils.isIDGood(req.id);
-		res.status(200).json(await db.getItem(id, model));
+		ctx = matchedData(ctx);
+		const id = await utils.isIDGood(ctx.id);
+		ctx.status(200).json(await db.getItem(id, model));
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Update item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.updateItem = async (req, res) => {
+exports.updateItem = async (ctx) => {
 	try {
-		req = matchedData(req);
-		const id = await utils.isIDGood(req.id);
-		const doesCityExists = await cityExistsExcludingItself(id, req.name);
+
+		const id = await utils.isIDGood(ctx.id);
+		const doesCityExists = await cityExistsExcludingItself(id, ctx.name);
 		if (!doesCityExists) {
-			res.status(200).json(await db.updateItem(id, model, req));
+			ctx.status(200).json(await db.updateItem(id, model, ctx));
 		}
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Create item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.createItem = async (req, res) => {
+exports.createItem = async (ctx) => {
 	try {
-		req = matchedData(req);
-		const doesCityExists = await cityExists(req.name);
+		ctx = matchedData(ctx);
+		const doesCityExists = await cityExists(ctx.name);
 		if (!doesCityExists) {
-			res.status(201).json(await db.createItem(req, model));
+			ctx.status(201).json(await db.createItem(ctx, model));
 		}
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Delete item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.deleteItem = async (req, res) => {
+exports.deleteItem = async (ctx) => {
 	try {
-		req = matchedData(req);
-		const id = await utils.isIDGood(req.id);
-		res.status(200).json(await db.deleteItem(id, model));
+		ctx = matchedData(ctx);
+		const id = await utils.isIDGood(ctx.id);
+		ctx.status(200).json(await db.deleteItem(id, model));
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };

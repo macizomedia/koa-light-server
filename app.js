@@ -16,7 +16,6 @@ const schema = require('./graphql/schema');
 const initDB = require('./config/database');
 
 
-const api = require('./router');
 const errorHandler = require('./middleware/errorHandler');
 
 initDB();
@@ -58,7 +57,16 @@ app.use(bodyparser({
 	}
 }));
 
-app.use(cors());
+const koaOptions = {
+	'origin': '*',
+	'credentials': true,
+	'allowMethods': ['GET,PUT,POST,DELETE,PATCH,OPTIONS'],
+	'allowHeaders': ['Content-Type, Authorization'],
+	'allowedHeaders': ['sessionId', 'Content-Type'],
+	'exposedHeaders': ['sessionId'],
+	'preflightContinue': false
+};
+app.use(cors(koaOptions));
 app.use(compression());
 app.use(helmet());
 app.use(respond());
@@ -68,15 +76,20 @@ app.use(i18n(app, {
 	locales: ['es', 'en'],
 	objectNotation: true
 }));
-
+// Sessions
+const session = require('koa-session');
+app.keys = ['secret'];
+app.use(session({}, app));
 app.use(passport.initialize());
+app.use(passport.session(app));
 app.use(errorHandler);
+
+const api = require('./router');
+app.use(api.middleware());
+
 app.use(mount('/graphql', graphqlHTTP({
 	schema,
 	graphiql: true
 })));
-
-app.use(api.middleware());
-
 
 app.listen(process.env.PORT || 3000, () => console.log('server started 3000'));

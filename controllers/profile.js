@@ -1,7 +1,6 @@
-const model = require('../../models/user');
-const utils = require('../../middleware/utils');
-const { matchedData } = require('express-validator');
-const auth = require('../../middleware/auth');
+const model = require('../models/user');
+const utils = require('../middleware/utils');
+const auth = require('../middleware/auth');
 
 /*********************
  * Private functions *
@@ -22,14 +21,14 @@ const getProfileFromDB = async (id) => {
 
 /**
  * Updates profile in database
- * @param {Object} req - request object
+ * @param {Object} ctx - request object
  * @param {string} id - user id
  */
-const updateProfileInDB = async (req, id) => {
+const updateProfileInDB = async (ctx, id) => {
 	return new Promise((resolve, reject) => {
 		model.findByIdAndUpdate(
 			id,
-			req,
+			ctx,
 			{
 				new: true,
 				runValidators: true,
@@ -69,15 +68,15 @@ const passwordsDoNotMatch = async () => {
 /**
  * Changes password in database
  * @param {string} id - user id
- * @param {Object} req - request object
+ * @param {Object} ctx - request object
  */
-const changePasswordInDB = async (id, req) => {
+const changePasswordInDB = async (id, ctx) => {
 	return new Promise((resolve, reject) => {
 		model.findById(id, '+password', (err, user) => {
 			utils.itemNotFound(err, user, reject, 'NOT_FOUND');
 
 			// Assigns new password to user
-			user.password = req.newPassword;
+			user.password = ctx.newPassword;
 
 			// Saves in DB
 			user.save((error) => {
@@ -96,51 +95,50 @@ const changePasswordInDB = async (id, req) => {
 
 /**
  * Get profile function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.getProfile = async (req, res) => {
+exports.getProfile = async (ctx) => {
 	try {
-		const id = await utils.isIDGood(req.user._id);
-		res.status(200).json(await getProfileFromDB(id));
+		const id = await utils.isIDGood(ctx.state.user._id);
+		const result = await getProfileFromDB(id);
+		ctx.ok(result);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Update profile function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+* @param {Object} req - request & response
  */
-exports.updateProfile = async (req, res) => {
+exports.updateProfile = async (ctx) => {
 	try {
-		const id = await utils.isIDGood(req.user._id);
-		req = matchedData(req);
-		res.status(200).json(await updateProfileInDB(req, id));
+		const id = await utils.isIDGood(ctx.params.id);
+		const result = await updateProfileInDB(ctx.req.user, id);
+		console.log(result);
+		ctx.ok(result);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Change password function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+* @param {Object} req - request & response
  */
-exports.changePassword = async (req, res) => {
+exports.changePassword = async (ctx) => {
 	try {
-		const id = await utils.isIDGood(req.user._id);
+		const id = await utils.isIDGood(ctx.user._id);
 		const user = await findUser(id);
-		req = matchedData(req);
-		const isPasswordMatch = await auth.checkPassword(req.oldPassword, user);
+		const isPasswordMatch = await auth.checkPassword(ctx.oldPassword, user);
 		if (!isPasswordMatch) {
-			utils.handleError(res, await passwordsDoNotMatch());
+			utils.handleError(ctx, await passwordsDoNotMatch());
 		} else {
 			// all ok, proceed to change password
-			res.status(200).json(await changePasswordInDB(id, req));
+			const result = await changePasswordInDB(id, ctx);
+			ctx.ok(result);
 		}
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
