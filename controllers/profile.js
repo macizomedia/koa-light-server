@@ -113,8 +113,8 @@ exports.getProfile = async (ctx) => {
  */
 exports.updateProfile = async (ctx) => {
 	try {
-		const id = await utils.isIDGood(ctx.params.id);
-		const result = await updateProfileInDB(ctx.req.user, id);
+		const id = await utils.isIDGood(ctx.req.user._id);
+		const result = await updateProfileInDB(ctx.request.body, id);
 		console.log(result);
 		ctx.ok(result);
 	} catch (error) {
@@ -127,15 +127,16 @@ exports.updateProfile = async (ctx) => {
 * @param {Object} req - request & response
  */
 exports.changePassword = async (ctx) => {
+	console.log(ctx.request.body);
 	try {
-		const id = await utils.isIDGood(ctx.user._id);
+		const id = await utils.isIDGood(ctx.state.user._id);
 		const user = await findUser(id);
-		const isPasswordMatch = await auth.checkPassword(ctx.oldPassword, user);
+		const isPasswordMatch = await auth.checkPassword(ctx.request.body.oldPassword, user);
 		if (!isPasswordMatch) {
 			utils.handleError(ctx, await passwordsDoNotMatch());
 		} else {
 			// all ok, proceed to change password
-			const result = await changePasswordInDB(id, ctx);
+			const result = await changePasswordInDB(id, ctx.request.body);
 			ctx.ok(result);
 		}
 	} catch (error) {

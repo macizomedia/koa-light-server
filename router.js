@@ -11,15 +11,27 @@ const cities = require('./controllers/cities');
 const user = require('./controllers/users');
 const auth = require('./controllers/auth');
 
-const api = router(); 
+const api = router();
+
+/*********************
+ * Router & Validation *
+ *********************/
+
+
+/*
+ * profile routes
+ */
 
 api.get('/profile', requireAuth, profile.getProfile);
 
 api.patch('/profile', requireAuth, profile.updateProfile);
 
-api.post('/profile/changePassword', profile.changePassword);
+api.post('/profile/changePassword', requireAuth, profile.changePassword);
 
 
+/*
+ * Cities routes
+ */
 
 api.get('/cities/all', requireAuth, cities.getAllItems);
 
@@ -32,12 +44,6 @@ api.get('/cities/:id', requireAuth, cities.getItem);
 api.patch('/cities/:id', requireAuth, cities.updateItem);
 
 api.delete('/cities/:id', requireAuth, cities.deleteItem);
-
-
-
-/*********************
- * Router & Validation *
- *********************/
 
 /*
  * Auth routes
@@ -154,7 +160,7 @@ api.route({
 			200: {
 				body: {
 					email: Joi.string().lowercase(),
-					verification:Joi.string(),
+					verification: Joi.string(),
 					msg: Joi.string()
 				}
 			}
@@ -173,13 +179,13 @@ api.route({
 		params: {
 			email: Joi.string().lowercase().email(),
 			password: Joi.string().max(100),
-			id:Joi.string()
+			id: Joi.string()
 		},
 		output: {
 			200: {
 				body: {
 					email: Joi.string().lowercase(),
-					verification:Joi.string(),
+					verification: Joi.string(),
 					msg: Joi.string()
 				}
 			}
@@ -202,8 +208,8 @@ api.route({
 			'user-agent': Joi.optional(),
 			host: Joi.optional(),
 			'content-length': Joi.optional(),
-			'accept-encoding':Joi.optional(),
-			connection:Joi.optional(),
+			'accept-encoding': Joi.optional(),
+			connection: Joi.optional(),
 		},
 		output: {
 			'100-200,300-599': {
@@ -232,8 +238,8 @@ api.route({
 			'user-agent': Joi.optional(),
 			host: Joi.optional(),
 			'content-length': Joi.optional(),
-			'accept-encoding':Joi.optional(),
-			connection:Joi.optional(),
+			'accept-encoding': Joi.optional(),
+			connection: Joi.optional(),
 		},
 		body: {
 			email: Joi.string().lowercase().email().required(),
@@ -281,7 +287,7 @@ api.route({
 	path: '/users',
 	validate: {
 		params: {
-			query:Joi.string().alphanum()
+			query: Joi.string().alphanum()
 		},
 		output: {
 			'100-200,300-599': {
@@ -297,13 +303,25 @@ api.route({
 	/*  auth.roleAuthorization(['admin']),   */
 });
 
+/*
+ * Create items route
+ */
+
 api.post('/users', requireAuth, user.createItem);
 
+/*
+ * Get item route
+ */
 
 api.get('/users/:id', requireAuth, user.getItem);
 
+api.patch('/users/:id', requireAuth, user.updateItem);
 
-api.route({
+/*
+ * Update item route
+ */
+
+/* api.route({
 	method: ['patch'],
 	path: '/users/:id',
 	validate: {
@@ -321,7 +339,11 @@ api.route({
 		type: 'json',
 	},
 	handler: user.updateItem,
-});
+}); */
+
+/*
+ * Delete item route
+ */
 
 api.delete('/users/:id', requireAuth, user.deleteItem);
 

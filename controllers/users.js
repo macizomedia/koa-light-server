@@ -81,7 +81,7 @@ exports.getItem = async (ctx) => {
  * @param {Object} ctx - request & response
  */
 exports.updateItem = async (ctx) => {
-	console.log('update item', ctx.req);
+	console.log('update item', ctx.request.body);
 	const id = await utils.isIDGood(ctx.params.id);
 	const doesEmailExists = await emailer.emailExistsExcludingMyself(
 		id,
@@ -89,8 +89,7 @@ exports.updateItem = async (ctx) => {
 	);
 	try {
 		if (!doesEmailExists) {
-			const result = await db.updateItem(id, model, ctx.req);
-			console.log('the result', result);
+			const result = await db.updateItem(id, model, ctx.request.body);
 			ctx.ok(result);
 		}
 	} catch (error) {
@@ -106,11 +105,12 @@ exports.createItem = async (ctx) => {
 	try {
 		// Gets locale from header 'Accept-Language'
 		/* const locale = req.getLocale(); */
-		const doesEmailExists = await emailer.emailExists(ctx.email);
+		const doesEmailExists = await emailer.emailExists(ctx.request.body.email);
 		if (!doesEmailExists) {
-			const item = await createItem(ctx);
+			const item = await createItem(ctx.request.body);
 			/* emailer.sendRegistrationEmailMessage(locale, item); */
-			ctx.status(201).json(item);
+			const result = item;
+			ctx.created(result);
 		}
 	} catch (error) {
 		utils.handleError(ctx, error);
@@ -123,8 +123,9 @@ exports.createItem = async (ctx) => {
  */
 exports.deleteItem = async (ctx) => {
 	try {
-		const id = await utils.isIDGood(ctx.id);
-		ctx.status(200).json(await db.deleteItem(id, model));
+		const id = await utils.isIDGood(ctx.params.id);
+		const response = await db.deleteItem(id, model);
+		ctx.ok(response);
 	} catch (error) {
 		utils.handleError(ctx, error);
 	}

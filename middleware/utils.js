@@ -42,7 +42,7 @@ exports.handleError = (ctx, err) => {
 	const code = err.code;
 	const msg = err.message;
 	// Sends error to user
-	ctx.send(code, msg);			
+	ctx.badRequest(code, msg);			
 		
 };
 /**

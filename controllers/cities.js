@@ -1,5 +1,4 @@
 const model = require('../models/city');
-const { matchedData } = require('express-validator');
 const utils = require('../middleware/utils');
 const db = require('../middleware/db');
 
@@ -95,7 +94,9 @@ exports.getAllItems = async (ctx) => {
 exports.getItems = async (ctx) => {
 	try {
 		const query = await db.checkQueryString(ctx.request.query);
-		ctx.status(200).json(await db.getItems(ctx, model, query));
+		const response = await db.getItems(ctx, model, query);
+		ctx.ok(response);
+		
 	} catch (error) {
 		utils.handleError(ctx, error);
 	}
@@ -107,9 +108,9 @@ exports.getItems = async (ctx) => {
  */
 exports.getItem = async (ctx) => {
 	try {
-		ctx = matchedData(ctx);
-		const id = await utils.isIDGood(ctx.id);
-		ctx.status(200).json(await db.getItem(id, model));
+		const id = await utils.isIDGood(ctx.params.id);
+		const response = await db.getItem(id, model);
+		ctx.ok(response);
 	} catch (error) {
 		utils.handleError(ctx, error);
 	}
@@ -122,10 +123,11 @@ exports.getItem = async (ctx) => {
 exports.updateItem = async (ctx) => {
 	try {
 
-		const id = await utils.isIDGood(ctx.id);
-		const doesCityExists = await cityExistsExcludingItself(id, ctx.name);
+		const id = await utils.isIDGood(ctx.params.id);
+		const doesCityExists = await cityExistsExcludingItself(id, ctx.request.body.name);
 		if (!doesCityExists) {
-			ctx.status(200).json(await db.updateItem(id, model, ctx));
+			const response = await db.updateItem(id, model, ctx.request.body);
+			ctx.ok(response);
 		}
 	} catch (error) {
 		utils.handleError(ctx, error);
@@ -137,11 +139,12 @@ exports.updateItem = async (ctx) => {
  * @param {Object} ctx - request & response
  */
 exports.createItem = async (ctx) => {
+	console.log(ctx.request.body.name);
 	try {
-		ctx = matchedData(ctx);
-		const doesCityExists = await cityExists(ctx.name);
+		const doesCityExists = await cityExists(ctx.request.body.name);
 		if (!doesCityExists) {
-			ctx.status(201).json(await db.createItem(ctx, model));
+			const response = await db.createItem(ctx.request.body, model);
+			ctx.created(response);
 		}
 	} catch (error) {
 		utils.handleError(ctx, error);
@@ -154,9 +157,9 @@ exports.createItem = async (ctx) => {
  */
 exports.deleteItem = async (ctx) => {
 	try {
-		ctx = matchedData(ctx);
-		const id = await utils.isIDGood(ctx.id);
-		ctx.status(200).json(await db.deleteItem(id, model));
+		const id = await utils.isIDGood(ctx.params.id);
+		const response = await db.deleteItem(id, model);
+		ctx.ok(response);
 	} catch (error) {
 		utils.handleError(ctx, error);
 	}
