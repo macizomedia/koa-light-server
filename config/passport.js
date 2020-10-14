@@ -1,21 +1,22 @@
-const passport = require('passport');
+const passport = require('koa-passport');
 const User = require('../models/user');
 const auth = require('../middleware/auth');
 const JwtStrategy = require('passport-jwt').Strategy;
 
 /**
  * Extracts token from: header, body or query
- * @param {Object} req - request object
+ * @param {Object} ctx - request object
  * @returns {string} token - decrypted token
  */
-const jwtExtractor = (req) => {
+const jwtExtractor = (ctx) => {
+	const data = ctx.req.headers.authorization;
 	let token = null;
-	if (req.headers.authorization) {
-		token = req.headers.authorization.replace('Bearer ', '').trim();
-	} else if (req.body.token) {
-		token = req.body.token.trim();
-	} else if (req.query.token) {
-		token = req.query.token.trim();
+	if (data) {
+		token = ctx.req.headers.authorization.replace('Bearer ', '').trim();
+	} else if (ctx.body.token) {
+		token = ctx.body.token.trim();
+	} else if (ctx.query.token) {
+		token = ctx.query.token.trim();
 	}
 	if (token) {
 		// Decrypts token
@@ -43,5 +44,6 @@ const jwtLogin = new JwtStrategy(jwtOptions, (payload, done) => {
 		return !user ? done(null, false) : done(null, user);
 	});
 });
+
 
 passport.use(jwtLogin);

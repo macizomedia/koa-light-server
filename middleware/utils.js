@@ -34,19 +34,17 @@ exports.getCountry = (req) =>
  * @param {Object} res - response object
  * @param {Object} err - error object
  */
-exports.handleError = (res, err) => {
+exports.handleError = (ctx, err) => {
 	// Prints error in console
 	if (process.env.NODE_ENV === 'development') {
 		console.log(err);
 	}
+	const code = err.code;
+	const msg = err.message;
 	// Sends error to user
-	res.status(err.code).json({
-		errors: {
-			msg: err.message
-		}
-	});
+	ctx.badRequest(code, msg);			
+		
 };
-
 /**
  * Builds error object
  * @param {number} code - error code

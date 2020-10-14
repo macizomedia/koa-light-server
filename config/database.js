@@ -6,6 +6,7 @@ const initDB = () => {
 	mongoose.connect(process.env.DB_CONNECTION, {
 		useNewUrlParser: true,
 		useUnifiedTopology: true,
+		useFindAndModify: false,
 		serverSelectionTimeoutMS: 5000
 	});
 

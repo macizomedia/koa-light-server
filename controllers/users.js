@@ -1,6 +1,5 @@
 const model = require('../models/user');
 const uuid = require('uuid');
-const { matchedData } = require('express-validator');
 const utils = require('../middleware/utils');
 const db = require('../middleware/db');
 const emailer = require('../middleware/emailer');
@@ -13,16 +12,16 @@ const emailer = require('../middleware/emailer');
  * Creates a new item in database
  * @param {Object} req - request object
  */
-const createItem = async (req) => {
+const createItem = async (ctx) => {
 	return new Promise((resolve, reject) => {
 		const user = new model({
-			name: req.name,
-			email: req.email,
-			password: req.password,
-			role: req.role,
-			phone: req.phone,
-			city: req.city,
-			country: req.country,
+			name: ctx.name,
+			email: ctx.email,
+			password:ctx.password,
+			role: ctx.role,
+			phone: ctx.phone,
+			city: ctx.city,
+			country: ctx.country,
 			verification: uuid.v4()
 		});
 		user.save((err, item) => {
@@ -50,86 +49,84 @@ const createItem = async (req) => {
 
 /**
  * Get items function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response object
  */
-exports.getItems = async (req, res) => {
+exports.getItems = async (ctx) => {
 	try {
-		const query = await db.checkQueryString(req.query);
-		res.status(200).json(await db.getItems(req, model, query));
+		const query = await db.checkQueryString(ctx.request.query);
+		const result = await db.getItems(ctx, model, query);
+		ctx.ok(result);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Get item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.getItem = async (req, res) => {
+exports.getItem = async (ctx) => {
 	try {
-		req = matchedData(req);
-		const id = await utils.isIDGood(req.id);
-		res.status(200).json(await db.getItem(id, model));
+		const id = await utils.isIDGood(ctx.params.id);
+		const result = await db.getItem(id, model);
+		console.log('get item', result); 
+		console.log('Reach user', ctx.res.body);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Update item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.updateItem = async (req, res) => {
+exports.updateItem = async (ctx) => {
+	console.log('update item', ctx.request.body);
+	const id = await utils.isIDGood(ctx.params.id);
+	const doesEmailExists = await emailer.emailExistsExcludingMyself(
+		id,
+		ctx.email
+	);
 	try {
-		req = matchedData(req);
-		const id = await utils.isIDGood(req.id);
-		const doesEmailExists = await emailer.emailExistsExcludingMyself(
-			id,
-			req.email
-		);
 		if (!doesEmailExists) {
-			res.status(200).json(await db.updateItem(id, model, req));
+			const result = await db.updateItem(id, model, ctx.request.body);
+			ctx.ok(result);
 		}
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Create item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.createItem = async (req, res) => {
+exports.createItem = async (ctx) => {
 	try {
 		// Gets locale from header 'Accept-Language'
-		const locale = req.getLocale();
-		req = matchedData(req);
-		const doesEmailExists = await emailer.emailExists(req.email);
+		/* const locale = req.getLocale(); */
+		const doesEmailExists = await emailer.emailExists(ctx.request.body.email);
 		if (!doesEmailExists) {
-			const item = await createItem(req);
-			emailer.sendRegistrationEmailMessage(locale, item);
-			res.status(201).json(item);
+			const item = await createItem(ctx.request.body);
+			/* emailer.sendRegistrationEmailMessage(locale, item); */
+			const result = item;
+			ctx.created(result);
 		}
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
 /**
  * Delete item function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request & response
  */
-exports.deleteItem = async (req, res) => {
+exports.deleteItem = async (ctx) => {
 	try {
-		req = matchedData(req);
-		const id = await utils.isIDGood(req.id);
-		res.status(200).json(await db.deleteItem(id, model));
+		const id = await utils.isIDGood(ctx.params.id);
+		const response = await db.deleteItem(id, model);
+		ctx.ok(response);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };

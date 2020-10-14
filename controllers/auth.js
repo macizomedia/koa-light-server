@@ -1,12 +1,11 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
+const auth = require('../middleware/auth');
 const UserAccess = require('../models/userAccess');
 const ForgotPassword = require('../models/forgotPassword');
 const utils = require('../middleware/utils');
 const uuid = require('uuid');
 const { addHours } = require('date-fns');
-const { matchedData } = require('express-validator');
-const auth = require('../middleware/auth');
 const emailer = require('../middleware/emailer');
 const HOURS_TO_BLOCK = 2;
 const LOGIN_ATTEMPTS = 5;
@@ -22,18 +21,17 @@ const LOGIN_ATTEMPTS = 5;
 const generateToken = (user) => {
 	// Gets expiration time
 	const expiration =
-    Math.floor(Date.now() / 1000) + 60 * process.env.JWT_EXPIRATION_IN_MINUTES;
+        Math.floor(Date.now() / 1000) + 60 * process.env.JWT_EXPIRATION_IN_MINUTES;
 
 	// returns signed and encrypted token
 	return auth.encrypt(
-		jwt.sign(
-			{
-				data: {
-					_id: user
-				},
-				exp: expiration
+		jwt.sign({
+			data: {
+				_id: user
 			},
-			process.env.JWT_SECRET
+			exp: expiration
+		},
+		process.env.JWT_SECRET
 		)
 	);
 };
@@ -42,66 +40,71 @@ const generateToken = (user) => {
  * Creates an object with user info
  * @param {Object} req - request object
  */
-const setUserInfo = (req) => {
+const setUserInfo = (ctx) => {
+	console.log(ctx);
 	let user = {
-		_id: req._id,
-		name: req.name,
-		email: req.email,
-		role: req.role,
-		verified: req.verified
+		_id: ctx._id,
+		name: ctx.name,
+		email: ctx.email,
+		role: ctx.role,
+		verified: ctx.verified
 	};
 	// Adds verification for testing purposes
 	if (process.env.NODE_ENV !== 'production') {
 		user = {
 			...user,
-			verification: req.verification
+			verification: ctx.verification
 		};
 	}
 	return user;
 };
-
 /**
- * Saves a new user access and then returns token
- * @param {Object} req - request object
- * @param {Object} user - user object
+ * Builds the registration token
+ * @param {Object} item - user object that contains created id
+ * @param {Object} userInfo - user object
  */
-const saveUserAccessAndReturnToken = async (req, user) => {
+const returnRegisterToken = (item, userInfo) => {
+	if (process.env.NODE_ENV !== 'production') {
+		userInfo.verification = item.verification;
+	}
+	const data = {
+		token: generateToken(item._id),
+		user: userInfo
+	};
+	return data;
+};
+/**
+ * Registers a new user in database
+ * @param {Object} req - request object
+ */
+const registerUser = async (ctx) => {
 	return new Promise((resolve, reject) => {
-		const userAccess = new UserAccess({
-			email: user.email,
-			ip: utils.getIP(req),
-			browser: utils.getBrowserInfo(req),
-			country: utils.getCountry(req)
+		const user = new User({
+			name: ctx.request.body.name,
+			email: ctx.request.body.email,
+			password: ctx.request.body.password,
+			verification: uuid.v4()
 		});
-		userAccess.save((err) => {
+		console.log(user);
+		user.save((err, item) => {
 			if (err) {
 				reject(utils.buildErrObject(422, err.message));
 			}
-			const userInfo = setUserInfo(user);
-			// Returns data with access token
-			resolve({
-				token: generateToken(user._id),
-				user: userInfo
-			});
+			resolve(item);
 		});
 	});
 };
 
 /**
- * Blocks a user by setting blockExpires to the specified date based on constant HOURS_TO_BLOCK
+ * Checks if blockExpires from user is greater than now
  * @param {Object} user - user object
  */
-const blockUser = async (user) => {
+const userIsBlocked = async (user) => {
 	return new Promise((resolve, reject) => {
-		user.blockExpires = addHours(new Date(), HOURS_TO_BLOCK);
-		user.save((err, result) => {
-			if (err) {
-				reject(utils.buildErrObject(422, err.message));
-			}
-			if (result) {
-				resolve(utils.buildErrObject(409, 'BLOCKED_USER'));
-			}
-		});
+		if (user.blockExpires > new Date()) {
+			reject(utils.buildErrObject(409, 'BLOCKED_USER'));
+		}
+		resolve(true);
 	});
 };
 
@@ -154,19 +157,6 @@ const checkLoginAttemptsAndBlockExpires = async (user) => {
 };
 
 /**
- * Checks if blockExpires from user is greater than now
- * @param {Object} user - user object
- */
-const userIsBlocked = async (user) => {
-	return new Promise((resolve, reject) => {
-		if (user.blockExpires > new Date()) {
-			reject(utils.buildErrObject(409, 'BLOCKED_USER'));
-		}
-		resolve(true);
-	});
-};
-
-/**
  * Finds user by email
  * @param {string} email - user´s email
  */
@@ -186,14 +176,47 @@ const findUser = async (email) => {
 };
 
 /**
- * Finds user by ID
- * @param {string} id - user´s id
+ * Saves a new user access and then returns token
+ * @param {Object} req - request object
+ * @param {Object} user - user object
  */
-const findUserById = async (userId) => {
+const saveUserAccessAndReturnToken = async (ctx, user) => {
 	return new Promise((resolve, reject) => {
-		User.findById(userId, (err, item) => {
-			utils.itemNotFound(err, item, reject, 'USER_DOES_NOT_EXIST');
-			resolve(item);
+		const userAccess = new UserAccess({
+			email: user.email,
+			ip: utils.getIP(ctx.req),
+			browser: utils.getBrowserInfo(ctx.req),
+			country: utils.getCountry(ctx.req)
+		});
+		console.log(userAccess);
+		userAccess.save((err) => {
+			if (err) {
+				reject(utils.buildErrObject(422, err.message));
+			}
+			const userInfo = setUserInfo(user);
+			// Returns data with access token
+			resolve({
+				token: generateToken(user._id),
+				user: userInfo
+			});
+		});
+	});
+};
+
+/**
+ * Blocks a user by setting blockExpires to the specified date based on constant HOURS_TO_BLOCK
+ * @param {Object} user - user object
+ */
+const blockUser = async (user) => {
+	return new Promise((resolve, reject) => {
+		user.blockExpires = addHours(new Date(), HOURS_TO_BLOCK);
+		user.save((err, result) => {
+			if (err) {
+				reject(utils.buildErrObject(422, err.message));
+			}
+			if (result) {
+				resolve(utils.buildErrObject(409, 'BLOCKED_USER'));
+			}
 		});
 	});
 };
@@ -213,43 +236,6 @@ const passwordsDoNotMatch = async (user) => {
 		}
 		reject(utils.buildErrObject(422, 'ERROR'));
 	});
-};
-
-/**
- * Registers a new user in database
- * @param {Object} req - request object
- */
-const registerUser = async (req) => {
-	return new Promise((resolve, reject) => {
-		const user = new User({
-			name: req.name,
-			email: req.email,
-			password: req.password,
-			verification: uuid.v4()
-		});
-		user.save((err, item) => {
-			if (err) {
-				reject(utils.buildErrObject(422, err.message));
-			}
-			resolve(item);
-		});
-	});
-};
-
-/**
- * Builds the registration token
- * @param {Object} item - user object that contains created id
- * @param {Object} userInfo - user object
- */
-const returnRegisterToken = (item, userInfo) => {
-	if (process.env.NODE_ENV !== 'production') {
-		userInfo.verification = item.verification;
-	}
-	const data = {
-		token: generateToken(item._id),
-		user: userInfo
-	};
-	return data;
 };
 
 /**
@@ -289,36 +275,33 @@ const verifyUser = async (user) => {
 		});
 	});
 };
-
 /**
- * Marks a request to reset password as used
- * @param {Object} req - request object
- * @param {Object} forgot - forgot object
+ * Builds an object with created forgot password object, if env is development or testing exposes the verification
+ * @param {Object} item - created forgot password object
  */
-const markResetPasswordAsUsed = async (req, forgot) => {
+const forgotPasswordResponse = (item) => {
+	let data = {
+		msg: 'RESET_EMAIL_SENT',
+		email: item.email
+	};
+	if (process.env.NODE_ENV !== 'production') {
+		data = {
+			...data,
+			verification: item.verification
+		};
+	}
+	return data;
+};
+
+const markResetPasswordAsUsed = async (ctx, forgot) => {
 	return new Promise((resolve, reject) => {
 		forgot.used = true;
-		forgot.ipChanged = utils.getIP(req);
-		forgot.browserChanged = utils.getBrowserInfo(req);
-		forgot.countryChanged = utils.getCountry(req);
+		forgot.ipChanged = utils.getIP(ctx);
+		forgot.browserChanged = utils.getBrowserInfo(ctx);
+		forgot.countryChanged = utils.getCountry(ctx);
 		forgot.save((err, item) => {
 			utils.itemNotFound(err, item, reject, 'NOT_FOUND');
 			resolve(utils.buildSuccObject('PASSWORD_CHANGED'));
-		});
-	});
-};
-
-/**
- * Updates a user password in database
- * @param {string} password - new password
- * @param {Object} user - user object
- */
-const updatePassword = async (password, user) => {
-	return new Promise((resolve, reject) => {
-		user.password = password;
-		user.save((err, item) => {
-			utils.itemNotFound(err, item, reject, 'NOT_FOUND');
-			resolve(item);
 		});
 	});
 };
@@ -341,6 +324,15 @@ const findUserToResetPassword = async (email) => {
 	});
 };
 
+const updatePassword = async (password, user) => {
+	return new Promise((resolve, reject) => {
+		user.password = password;
+		user.save((err, item) => {
+			utils.itemNotFound(err, item, reject, 'NOT_FOUND');
+			resolve(item);
+		});
+	});
+};
 /**
  * Checks if a forgot password verification exists
  * @param {string} id - verification id
@@ -364,15 +356,16 @@ const findForgotPassword = async (id) => {
  * Creates a new password forgot
  * @param {Object} req - request object
  */
-const saveForgotPassword = async (req) => {
+const saveForgotPassword = async (ctx) => {
 	return new Promise((resolve, reject) => {
 		const forgot = new ForgotPassword({
-			email: req.body.email,
+			email: ctx.request.body.email,
 			verification: uuid.v4(),
-			ipRequest: utils.getIP(req),
-			browserRequest: utils.getBrowserInfo(req),
-			countryRequest: utils.getCountry(req)
+			ipRequest: utils.getIP(ctx.req),
+			browserRequest: utils.getBrowserInfo(ctx.req),
+			countryRequest: utils.getCountry(ctx.req)
 		});
+		console.log(forgot);
 		forgot.save((err, item) => {
 			if (err) {
 				reject(utils.buildErrObject(422, err.message));
@@ -383,36 +376,14 @@ const saveForgotPassword = async (req) => {
 };
 
 /**
- * Builds an object with created forgot password object, if env is development or testing exposes the verification
- * @param {Object} item - created forgot password object
+ * Finds user by ID
+ * @param {string} id - user´s id
  */
-const forgotPasswordResponse = (item) => {
-	let data = {
-		msg: 'RESET_EMAIL_SENT',
-		email: item.email
-	};
-	if (process.env.NODE_ENV !== 'production') {
-		data = {
-			...data,
-			verification: item.verification
-		};
-	}
-	return data;
-};
-
-/**
- * Checks against user if has quested role
- * @param {Object} data - data object
- * @param {*} next - next callback
- */
-const checkPermissions = async (data, next) => {
+const findUserById = async (userId) => {
 	return new Promise((resolve, reject) => {
-		User.findById(data.id, (err, result) => {
-			utils.itemNotFound(err, result, reject, 'NOT_FOUND');
-			if (data.roles.indexOf(result.role) > -1) {
-				return resolve(next());
-			}
-			return reject(utils.buildErrObject(401, 'UNAUTHORIZED'));
+		User.findById(userId, (err, item) => {
+			utils.itemNotFound(err, item, reject, 'USER_DOES_NOT_EXIST');
+			resolve(item);
 		});
 	});
 };
@@ -433,6 +404,24 @@ const getUserIdFromToken = async (token) => {
 	});
 };
 
+
+/**
+ * Checks against user if has quested role
+ * @param {Object} data - data object
+ * @param {*} next - next callback
+ */
+const checkPermissions = async (data, next) => {
+	return new Promise((resolve, reject) => {
+		User.findById(data.id, (err, result) => {
+			utils.itemNotFound(err, result, reject, 'NOT_FOUND');
+			if (data.roles.indexOf(result.role) > -1) {
+				return resolve(next());
+			}
+			return reject(utils.buildErrObject(401, 'UNAUTHORIZED'));
+		});
+	});
+};
+
 /********************
  * Public functions *
  ********************/
@@ -442,23 +431,30 @@ const getUserIdFromToken = async (token) => {
  * @param {Object} req - request object
  * @param {Object} res - response object
  */
-exports.login = async (req, res) => {
+exports.login = async (ctx) => {
+	console.log(ctx.request);
 	try {
-		const data = matchedData(req);
+		const data = ctx.request.body;
 		const user = await findUser(data.email);
+		console.log(user);
 		await userIsBlocked(user);
 		await checkLoginAttemptsAndBlockExpires(user);
 		const isPasswordMatch = await auth.checkPassword(data.password, user);
 		if (!isPasswordMatch) {
-			utils.handleError(res, await passwordsDoNotMatch(user));
+			utils.handleError(ctx, await passwordsDoNotMatch(user));
 		} else {
 			// all ok, register access and return token
 			user.loginAttempts = 0;
 			await saveLoginAttemptsToDB(user);
-			res.status(200).json(await saveUserAccessAndReturnToken(req, user));
+			const response = await saveUserAccessAndReturnToken(ctx, user);
+			const token = response.token;
+			ctx.header.authorization= `Bearer ${token}`;
+			ctx.state.user = response.user;
+			console.log(response);
+			ctx.ok(response);
 		}
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
@@ -467,36 +463,35 @@ exports.login = async (req, res) => {
  * @param {Object} req - request object
  * @param {Object} res - response object
  */
-exports.register = async (req, res) => {
+exports.register = async (ctx, next) => {
 	try {
-		// Gets locale from header 'Accept-Language'
-		const locale = req.getLocale();
-		req = matchedData(req);
-		const doesEmailExists = await emailer.emailExists(req.email);
+		const doesEmailExists = await emailer.emailExists(ctx.request.body.email);
 		if (!doesEmailExists) {
-			const item = await registerUser(req);
+			const item = await registerUser(ctx);
 			const userInfo = setUserInfo(item);
 			const response = returnRegisterToken(item, userInfo);
-			emailer.sendRegistrationEmailMessage(locale, item);
-			res.status(201).json(response);
+			console.log(response);
+			ctx.ok(response);
 		}
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx.res, error);
 	}
+	next();
 };
 
 /**
  * Verify function called by route
- * @param {Object} req - request object
- * @param {Object} res - response object
+ * @param {Object} ctx - request response object
  */
-exports.verify = async (req, res) => {
+exports.verify = async (ctx) => {
+	console.log(ctx.request.query.id);
 	try {
-		req = matchedData(req);
-		const user = await verificationExists(req.id);
-		res.status(200).json(await verifyUser(user));
+		const user = await verificationExists(ctx.request.query.id);
+		const response = await verifyUser(user);
+		console.log(response);
+		ctx.ok(response);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
@@ -505,17 +500,18 @@ exports.verify = async (req, res) => {
  * @param {Object} req - request object
  * @param {Object} res - response object
  */
-exports.forgotPassword = async (req, res) => {
+exports.forgotPassword = async (ctx) => {
 	try {
-		// Gets locale from header 'Accept-Language'
-		const locale = req.getLocale();
-		const data = matchedData(req);
+		console.log(ctx.request.body);
+		/* const locale = ctx.getLocale(); */
+		const data = ctx.request.body;
 		await findUser(data.email);
-		const item = await saveForgotPassword(req);
-		emailer.sendResetPasswordEmailMessage(locale, item);
-		res.status(200).json(forgotPasswordResponse(item));
+		const item = await saveForgotPassword(ctx);
+		/* emailer.sendResetPasswordEmailMessage(locale, item); */
+		const response = forgotPasswordResponse(item);
+		ctx.ok(response);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
@@ -524,16 +520,17 @@ exports.forgotPassword = async (req, res) => {
  * @param {Object} req - request object
  * @param {Object} res - response object
  */
-exports.resetPassword = async (req, res) => {
+exports.resetPassword = async (ctx) => {
 	try {
-		const data = matchedData(req);
+		console.log(ctx.request.body);
+		const data = ctx.request.body;
 		const forgotPassword = await findForgotPassword(data.id);
 		const user = await findUserToResetPassword(forgotPassword.email);
 		await updatePassword(data.password, user);
-		const result = await markResetPasswordAsUsed(req, forgotPassword);
-		res.status(200).json(result);
+		const result = await markResetPasswordAsUsed(ctx, forgotPassword);
+		ctx.ok(result);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
@@ -542,20 +539,20 @@ exports.resetPassword = async (req, res) => {
  * @param {Object} req - request object
  * @param {Object} res - response object
  */
-exports.getRefreshToken = async (req, res) => {
+exports.getRefreshToken = async (ctx) => {
 	try {
-		const tokenEncrypted = req.headers.authorization
+		const tokenEncrypted = ctx.request.header.authorization
 			.replace('Bearer ', '')
 			.trim();
 		let userId = await getUserIdFromToken(tokenEncrypted);
 		userId = await utils.isIDGood(userId);
 		const user = await findUserById(userId);
-		const token = await saveUserAccessAndReturnToken(req, user);
+		const token = await saveUserAccessAndReturnToken(ctx, user);
 		// Removes user info from response
 		delete token.user;
-		res.status(200).json(token);
+		ctx.ok(token);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
 
@@ -563,14 +560,15 @@ exports.getRefreshToken = async (req, res) => {
  * Roles authorization function called by route
  * @param {Array} roles - roles specified on the route
  */
-exports.roleAuthorization = (roles) => async (req, res, next) => {
+exports.roleAuthorization = (roles) => async (ctx, next) => {
+	console.log(ctx.request.header.authorization);
 	try {
 		const data = {
-			id: req.user._id,
+			id: ctx.req.user._id,
 			roles
 		};
 		await checkPermissions(data, next);
 	} catch (error) {
-		utils.handleError(res, error);
+		utils.handleError(ctx, error);
 	}
 };
